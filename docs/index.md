@@ -12,11 +12,11 @@ Commands for both agents stay in [runbook.md](../runbook.md). Run a page's comma
 | 4 | [The action agent](04-the-action-agent.md) | How does one message become one department? | `RouterAgent`, `Department`, `RoutingDecision` |
 | 5 | [Prompts](05-prompts.md) | What is `prompt_1`, what did `prompt_2` add, and what are you allowed to change? | `action_autonomy/prompts/` |
 | 6 | [Test cases](06-test-cases.md) | What is a labeled row, and why is a demo message not a test? | `data/v1_test_cases.csv` |
-| 7 | [Action evaluation](07-action-evaluation.md) | How does a case become `PASS` or `FAIL`, and what does the summary add up? | `action_autonomy/evaluation.py` |
-| 8 | [Terminal and Phoenix](08-terminal-and-phoenix.md) | What does the command print, and what does a trace show that the score does not? | `action_autonomy/tracing.py` |
+| 7 | [Action evaluation](07-action-evaluation.md) | How does a case become `PASS` or `FAIL` on experiment `action-prompt_1`? | `action_autonomy/evaluation.py`, dataset `action-routing-v1` |
+| 8 | [Terminal and Phoenix](08-terminal-and-phoenix.md) | What does the command print, what does the experiment store, and what does a trace add? | `action_autonomy/tracing.py` |
 | 9 | [The planning agent](09-the-planning-agent.md) | How does planning reuse the router, then retrieve procedures and write a plan? | `planning_autonomy/agent.py` |
 | 10 | [Retrieval](10-retrieval.md) | What is an SOP, how does BM25 rank them, and what changes between top 2 and top 4? | `data/sops/`, `planning_autonomy/sops.py` |
-| 11 | [The plan and the judge](11-plan-and-the-judge.md) | What is SOP recall, what is plan alignment, and why can those two scores disagree? | `data/v2_test_cases.csv`, `planning_autonomy/evaluation.py` |
-| 12 | [Change one thing and score again](12-change-and-compare.md) | How do you use a miss, a trace, and `--compare` to tell whether a change helped? | Both evaluation modules |
+| 11 | [The plan and the judge](11-plan-and-the-judge.md) | What is SOP recall, what is plan alignment, and why can those two scores disagree? | Dataset `planning-v2`, experiments `planning-prompt_1` and `planning-prompt_2` |
+| 12 | [Change one thing and score again](12-change-and-compare.md) | How do you use an experiment, a trace, and `--compare` to tell whether a change helped? | Both datasets |
 
 After step 12, use [runbook.md](../runbook.md) as the practice sequence. It runs the same agents in the same order: action first, then planning, on one Ollama model and one Phoenix server.

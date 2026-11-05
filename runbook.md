@@ -1,8 +1,8 @@
 # Manual test runbook
 
-Run these commands from the repository root to exercise `action_autonomy` and `planning_autonomy` by hand, including Phoenix. The V1 sequence is first. The V2 sequence starts at "Planning autonomy" and uses the same virtual environment, Ollama model, and Phoenix container. A command succeeded when it exits without an error and prints the result described under that step. The department the model chooses can differ from the label in `data/v1_test_cases.csv`. That is a routing miss to read in the report, not a broken command.
+Run these commands from the repository root to exercise `action_autonomy` and `planning_autonomy` by hand, including Phoenix. The V1 sequence is first. The V2 sequence starts at "Planning autonomy" and uses the same virtual environment, Ollama model, and Phoenix container. A command succeeded when it exits without an error and prints the result described under that step. The department the model chooses can differ from the label in `data/v1_test_cases.csv`. That difference is a `FAIL` on the experiment. The command can still succeed.
 
-A full pass calls the model many times. The demo is 6 calls. Each scored prompt is 30 calls. `--compare` scores both prompts, so it is 60 calls. Do the short checks first.
+A full pass calls the model many times. The demo is 6 calls. Each scored prompt is 30 calls. `--compare` scores both prompts, so it is 60 calls. Score commands need Phoenix. Do the short checks first.
 
 ## 1. Install
 
@@ -67,56 +67,61 @@ python -m action_autonomy --prompt-name prompt_2 --demo
 
 Each run prints `ROUTER AGENT DEMO` and six decisions. The messages are a double charge, a late package, a return, a stock question, a password failure, and an upset caller.
 
-## 6. Score each prompt
+## 6. Start Phoenix
+
+Open a second terminal and leave this process running. The score commands in the next steps need it:
+
+```bash
+docker run --rm -p 6006:6006 -p 4317:4317 -e PHOENIX_ENABLE_AUTH=false arizephoenix/phoenix
+```
+
+The current Phoenix image listens on every network address, so authentication turns on unless `PHOENIX_ENABLE_AUTH` is `false`. This project sends no API key. With authentication on, Phoenix rejects the experiment client and the traces, and the UI asks for a login (`admin@localhost` / `admin` on a fresh container).
+
+Open http://127.0.0.1:6006. The page should load with no username or password.
+
+On Python 3.12 or 3.13, `pip install arize-phoenix` and `python -m action_autonomy --phoenix` can start the UI instead of Docker. On Python 3.15 that command cannot start Phoenix. Do not install `arize-phoenix` or `arize-phoenix-otel` into this environment. Use the Docker command above. If something is already listening on port 6006, `--phoenix` prints `Phoenix is already running` and exits.
+
+## 7. Score each prompt
 
 ```bash
 python -m action_autonomy --prompt-name prompt_1
 python -m action_autonomy --prompt-name prompt_2
 ```
 
-Each run prints 30 lines, `TC001` through `TC030`, marked `PASS` or `FAIL`, then an accuracy report: overall accuracy, a bar per department, and the missed cases. These two commands do not send traces.
+Each run is 30 model calls. The first run creates the dataset `action-routing-v1`. The second run reuses it. The terminal ends with the experiment name and a compare URL:
 
-## 7. Start Phoenix
-
-Open a second terminal, activate the same virtual environment only if you need it there, and leave this process running:
-
-```bash
-docker run --rm -p 6006:6006 -p 4317:4317 -e PHOENIX_ENABLE_AUTH=false arizephoenix/phoenix
+```text
+Experiment: action-prompt_1
+http://127.0.0.1:6006/datasets/<dataset id>/compare?experimentId=<experiment id>
 ```
 
-The current Phoenix image listens on every network address, so authentication turns on unless `PHOENIX_ENABLE_AUTH` is `false`. This project sends traces without an API key. With authentication on, Phoenix rejects those traces, and the UI asks for a login (`admin@localhost` / `admin` on a fresh container).
-
-Open http://127.0.0.1:6006. The page should load with no username or password.
-
-On Python 3.12 or 3.13, `pip install arize-phoenix` and `python -m action_autonomy --phoenix` can start the UI instead of Docker. On Python 3.15 that command cannot start Phoenix. Use the Docker command above. If something is already listening on port 6006, `--phoenix` prints `Phoenix is already running` and exits.
+The second command names `action-prompt_2`. Open each URL. A row shows the department, the reason, and `department_matches` as `PASS` or `FAIL`. These two commands do not fill the tracing projects. If port 6006 is closed, the command exits with the Docker command from step 6 and does not print a local report.
 
 ## 8. Score again and send traces
 
-Back in the first terminal:
+Back in the first terminal, with Phoenix still running:
 
 ```bash
 python -m action_autonomy --prompt-name prompt_1 --trace
 python -m action_autonomy --prompt-name prompt_2 --trace
 ```
 
-When Phoenix is up, each run prints:
+Each run prints that Phoenix is already running, then:
 
 ```text
-Phoenix is already running at http://127.0.0.1:6006.
 Tracing enabled for project: V1_action_autonomy_prompt_1
-Each routing decision is being traced in Phoenix.
 ```
 
-The second command names `V1_action_autonomy_prompt_2`. The terminal report matches step 6. If nothing is listening on port 6006 and this Python cannot start Phoenix, the run prints the Docker hint, then `Continuing without traces.`, and still scores the 30 cases.
+The second command names `V1_action_autonomy_prompt_2`. Each run also creates another experiment, again named `action-prompt_1` or `action-prompt_2`, and prints a new compare URL. The score is that experiment. The model calls are in the tracing project.
 
 In the UI:
 
-1. Choose Traces.
-2. Select `V1_action_autonomy_prompt_1`, then `V1_action_autonomy_prompt_2`.
-3. Filter for the error status.
-4. Open a failed trace. It should show the customer message, the system prompt, the department, and the reason. The span for a case is named `test_case_TC001` and the rest follow that pattern. A miss records `test.expected_department`, `result.predicted_department`, `error.expected`, and `error.got`.
+1. Open the compare URL and read `PASS` or `FAIL`.
+2. Choose Traces.
+3. Select `V1_action_autonomy_prompt_1`, then `V1_action_autonomy_prompt_2`.
+4. Open a model call. It shows the system prompt, the customer message, the department, and the reason. The span status says the call succeeded.
 
-`--message` and `--demo` accept `--trace` too. Those runs record the model call only. The `test_case_*` spans are created by the labeled evaluation.
+`--message` and `--demo` accept `--trace` too. Those runs record the model call only. They do not create an experiment. If Phoenix is down for one of those commands, the run prints the Docker hint, then `Continuing without traces.`, and still prints the decision.
 
 ## 9. Compare the two prompts
 
@@ -124,7 +129,13 @@ In the UI:
 python -m action_autonomy --compare --trace
 ```
 
-This scores `prompt_1` and then `prompt_2` on the same 30 cases and prints both reports plus a comparison: overall accuracy for each prompt, the change, cases fixed by `prompt_2`, cases still failing, and new failures. With Phoenix still running, the two projects each receive a trace for every case.
+This runs `action-prompt_1` and then `action-prompt_2` on the same 30 cases, about 60 model calls. It prints both experiment URLs and a dataset experiments page:
+
+```text
+http://127.0.0.1:6006/datasets/<dataset id>/experiments
+```
+
+Open that page and compare the two experiments. With `--trace`, the two tracing projects each receive the model calls. The command does not print a local list of fixed or new failures.
 
 The same comparison without naming the default pair:
 
@@ -134,7 +145,7 @@ python -m action_autonomy --compare prompt_1 prompt_2
 
 ## 10. Optional one-off overrides
 
-Score an explicit copy of the same file:
+Score an explicit copy of the same file. After step 7 this reuses the dataset `action-routing-v1` and adds another `action-prompt_1` experiment:
 
 ```bash
 python -m action_autonomy --prompt-name prompt_1 --test-cases data/v1_test_cases.csv
@@ -178,14 +189,14 @@ python -m planning_autonomy --prompt-name prompt_1 --demo
 
 Each run prints the routing model `llama3.1` at `http://localhost:11434/v1`, a department, a reason, SOP ids with scores, and a numbered plan. A department other than `RETURNS` is the model's choice, not a broken command.
 
-The scored runs are long. One prompt is 22 cases and about 66 model calls: route, plan, and judge. `--compare` scores both prompts, about 132 calls. Run them only when you want the full report.
+The scored runs are long. One prompt is 22 cases and about 66 model calls: route, plan, and judge. `--compare` scores both prompts, about 132 calls. Run them only when you want the full experiment. Phoenix has to be the server from step 6. If it is down, the command exits and does not print a local report.
 
 ```bash
 python -m planning_autonomy --prompt-name prompt_1
 python -m planning_autonomy --prompt-name prompt_2
 ```
 
-Each case line shows recall and alignment (`good`, `partial`, or `bad`). The report ends with mean SOP recall and the alignment counts. These commands do not send traces.
+The first run creates the dataset `planning-v2`. The second run reuses it. Each command prints an experiment name, `planning-prompt_1` or `planning-prompt_2`, and a compare URL. Open it. `sop_recall` is a score from 0 to 1. `plan_alignment` is `good`, `partial`, or `bad`. These commands do not fill the tracing projects.
 
 With Phoenix still running:
 
@@ -194,14 +205,14 @@ python -m planning_autonomy --prompt-name prompt_1 --trace
 python -m planning_autonomy --prompt-name prompt_2 --trace
 ```
 
-The projects are `V2_planning_autonomy_prompt_1` and `V2_planning_autonomy_prompt_2`. In the UI, open Traces, select one of those projects, and filter for the error status. A miss is a case whose expected SOP was not retrieved. The span is `test_case_0` through `test_case_21`. It records the message, the expected SOP ids, the department, and the retrieved SOP ids. V1 traces stay in `V1_action_autonomy_prompt_1` and `V1_action_autonomy_prompt_2`.
+The tracing projects are `V2_planning_autonomy_prompt_1` and `V2_planning_autonomy_prompt_2`. In the UI, open Traces and select one of those projects. A model call shows the message, the plan, or the judge reply. Recall and alignment stay on the experiment. V1 traces stay in `V1_action_autonomy_prompt_1` and `V1_action_autonomy_prompt_2`.
 
 ```bash
 python -m planning_autonomy --compare --trace
 python -m planning_autonomy --compare prompt_1 prompt_2
 ```
 
-The comparison prints the recall change, the change in the share of good plans, cases whose recall improved, cases that are still incomplete, and cases whose recall got worse.
+The comparison runs both experiments on `planning-v2` and prints both URLs. Read the recall change and the share of `good` plans on the dataset experiments page.
 
 Do not pass `data/v1_test_cases.csv` to this package. That file is the routing set.
 

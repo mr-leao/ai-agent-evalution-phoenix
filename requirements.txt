@@ -5,6 +5,9 @@ rank-bm25
 openinference-instrumentation-openai
 opentelemetry-sdk
 opentelemetry-exporter-otlp-proto-http
-# The Phoenix UI package (arize-phoenix) depends on arize-phoenix-otel,
-# which has no Python 3.15 build. Start the UI with Docker instead:
-#   docker run --rm -p 6006:6006 -p 4317:4317 arizephoenix/phoenix
+arize-phoenix-client==3.7.0
+arize-phoenix-evals==3.9.5
+# The Phoenix server package (arize-phoenix) depends on arize-phoenix-otel,
+# which has no Python 3.15 build. Do not install either package.
+# Start the UI with Docker. Score commands need this server:
+#   docker run --rm -p 6006:6006 -p 4317:4317 -e PHOENIX_ENABLE_AUTH=false arizephoenix/phoenix

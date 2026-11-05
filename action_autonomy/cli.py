@@ -8,10 +8,8 @@ from action_autonomy.agent import RouterAgent
 from action_autonomy.config import DEFAULT_TEST_CASES, Settings
 from action_autonomy.evaluation import (
     load_test_cases,
-    render_comparison,
-    render_metrics,
+    run_action_experiment,
     run_demo,
-    run_evaluation,
 )
 from action_autonomy.prompts import available_prompts, get_prompt
 from action_autonomy.tracing import (
@@ -68,14 +66,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PROMPT",
         help=(
-            "Evaluate two prompts and compare accuracy. "
-            "With no names, compares prompt_1 and prompt_2."
+            "Score two prompts as Phoenix experiments on the same dataset. "
+            "With no names, scores prompt_1 and prompt_2."
         ),
     )
     parser.add_argument(
         "--trace",
         action="store_true",
-        help="Record model calls and test results in Arize Phoenix.",
+        help=(
+            "Record model calls in Arize Phoenix. "
+            "A score command stores pass or fail on the experiment either way."
+        ),
     )
     parser.add_argument(
         "--phoenix",
@@ -198,30 +199,32 @@ def _settings_from_args(args: argparse.Namespace) -> Settings:
 def _compare(names: list[str], settings: Settings, test_cases: Path, trace: bool) -> None:
     prompts = [get_prompt(name) for name in names]
     frame = load_test_cases(test_cases)
-    scored = []
+    calls = len(frame) * len(prompts)
+    print(
+        f"Comparison runs {len(prompts)} experiments on {len(frame)} cases, "
+        f"about {calls} model calls.",
+        flush=True,
+    )
+    print(
+        "Phoenix stores each experiment. This command does not print a local comparison.",
+        flush=True,
+    )
+    print(flush=True)
     for prompt in prompts:
         session = _trace_session(prompt.name) if trace else None
         agent = RouterAgent(prompt.system_prompt, settings)
         try:
-            results = run_evaluation(
-                agent,
-                frame,
-                tracer=None if session is None else session.tracer,
-                prompt_name=prompt.name,
-            )
+            run_action_experiment(agent, frame, prompt.name)
         finally:
             if session is not None:
                 session.flush()
-        print()
-        print(render_metrics(results, prompt.name))
-        print()
-        scored.append(results)
-    print(render_comparison(prompts[0].name, scored[0], prompts[1].name, scored[1]))
+        print(flush=True)
 
 
 def _run_named_prompt(args: argparse.Namespace, settings: Settings) -> None:
     prompt = get_prompt(args.prompt_name)
-    if not args.message and not args.demo:
+    scoring = not args.message and not args.demo
+    if scoring:
         # Fail on a missing file before any model call or trace setup.
         frame = load_test_cases(args.test_cases)
     _announce(prompt, settings)
@@ -234,17 +237,10 @@ def _run_named_prompt(args: argparse.Namespace, settings: Settings) -> None:
         if args.demo:
             run_demo(agent, prompt.name)
             return
-        results = run_evaluation(
-            agent,
-            frame,
-            tracer=None if session is None else session.tracer,
-            prompt_name=prompt.name,
-        )
+        run_action_experiment(agent, frame, prompt.name)
     finally:
         if session is not None:
             session.flush()
-    print()
-    print(render_metrics(results, prompt.name))
 
 
 def _announce(prompt, settings: Settings) -> None:

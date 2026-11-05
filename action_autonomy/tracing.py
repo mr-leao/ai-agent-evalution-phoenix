@@ -154,6 +154,7 @@ def ui_hint() -> str:
         "This Python cannot start the Phoenix UI. "
         "arize-phoenix needs arize-phoenix-otel, which has no Python 3.15 build.\n"
         "Start Phoenix with Docker, then rerun with --trace:\n"
-        "  docker run --rm -p 6006:6006 -p 4317:4317 arizephoenix/phoenix\n"
+        "  docker run --rm -p 6006:6006 -p 4317:4317 "
+        "-e PHOENIX_ENABLE_AUTH=false arizephoenix/phoenix\n"
         f"Open {PHOENIX_URL} and choose Traces in the sidebar."
     )

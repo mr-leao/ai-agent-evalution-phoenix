@@ -18,10 +18,8 @@ from planning_autonomy.config import DEFAULT_TEST_CASES, PlanningSettings
 from planning_autonomy.evaluation import (
     load_test_cases,
     print_plan,
-    render_comparison,
-    render_metrics,
     run_demo,
-    run_evaluation,
+    run_planning_experiment,
 )
 from planning_autonomy.prompts import available_prompts, get_prompt
 
@@ -69,14 +67,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PROMPT",
         help=(
-            "Evaluate two prompts and compare recall and alignment. "
-            "With no names, compares prompt_1 and prompt_2."
+            "Score two prompts as Phoenix experiments on the same dataset. "
+            "With no names, scores prompt_1 and prompt_2."
         ),
     )
     parser.add_argument(
         "--trace",
         action="store_true",
-        help="Record model calls and test results in Arize Phoenix.",
+        help=(
+            "Record model calls in Arize Phoenix. "
+            "A score command stores recall and alignment on the experiment either way."
+        ),
     )
     parser.add_argument(
         "--phoenix",
@@ -226,45 +227,30 @@ def _compare(names: list[str], settings: PlanningSettings, test_cases: Path, tra
     frame = load_test_cases(test_cases)
     calls = len(frame) * 3 * len(prompts)
     print(
-        f"Comparison scores {len(prompts)} prompts on {len(frame)} cases, "
+        f"Comparison runs {len(prompts)} experiments on {len(frame)} cases, "
         f"about {calls} model calls.",
         flush=True,
     )
+    print(
+        "Phoenix stores each experiment. This command does not print a local comparison.",
+        flush=True,
+    )
     print(flush=True)
-    scored = []
     for prompt in prompts:
         session = _trace_session(prompt.name) if trace else None
         agent = PlanningAgent(prompt.top_k, settings)
         try:
-            results = run_evaluation(
-                agent,
-                frame,
-                tracer=None if session is None else session.tracer,
-                prompt_name=prompt.name,
-            )
+            run_planning_experiment(agent, frame, prompt.name)
         finally:
             if session is not None:
                 session.flush()
-        print()
-        print(render_metrics(results, prompt.name, prompt.top_k))
-        print()
-        scored.append((prompt, results))
-    left, right = scored
-    print(
-        render_comparison(
-            left[0].name,
-            left[0].top_k,
-            left[1],
-            right[0].name,
-            right[0].top_k,
-            right[1],
-        )
-    )
+        print(flush=True)
 
 
 def _run_named_prompt(args: argparse.Namespace, settings: PlanningSettings) -> None:
     prompt = get_prompt(args.prompt_name)
-    if not args.message and not args.demo:
+    scoring = not args.message and not args.demo
+    if scoring:
         frame = load_test_cases(args.test_cases)
     _announce(prompt, settings)
     session = _trace_session(prompt.name) if args.trace else None
@@ -276,17 +262,10 @@ def _run_named_prompt(args: argparse.Namespace, settings: PlanningSettings) -> N
         if args.demo:
             run_demo(agent)
             return
-        results = run_evaluation(
-            agent,
-            frame,
-            tracer=None if session is None else session.tracer,
-            prompt_name=prompt.name,
-        )
+        run_planning_experiment(agent, frame, prompt.name)
     finally:
         if session is not None:
             session.flush()
-    print()
-    print(render_metrics(results, prompt.name, prompt.top_k))
 
 
 def _announce(prompt, settings: PlanningSettings) -> None:

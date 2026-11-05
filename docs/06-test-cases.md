@@ -17,7 +17,7 @@ A demo message is not a test case. Nothing is labeled, so nothing can pass or fa
 
 The first row is a double charge. The label is `BILLING`. The category says why that row exists: it is a duplicate-charge wording. Other rows cover the rest of the departments, including ambiguous wording and messages with more than one issue.
 
-The category is not sent to the model. It is there so a miss is easier to group when you read the report.
+The category is not sent to the model. It is stored as metadata on the experiment row, so a miss is easier to group.
 
 ## The planning file
 
@@ -31,7 +31,7 @@ The category is not sent to the model. It is there so a miss is easier to group 
 | `expected_steps` | Steps a good plan should cover |
 | `policy_details` | Policy facts the plan should respect |
 
-A cell can list more than one procedure, separated by commas. There is no `test_id`. The evaluation numbers rows from `0`.
+A cell can list more than one procedure, separated by commas. There is no `test_id`. The experiment stores the row number, `0` through `21`, as metadata.
 
 ## The files are not interchangeable
 
